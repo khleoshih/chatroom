@@ -2,121 +2,186 @@
 <html>
   <head>
     <title>Socket.IO chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="css/bootstrap.css" type = "text/css" />
-  <style>
-    html,body,.col-md-12{
-      height:96%;
-    }
-    .row{
-      height: 90%;
-    }
-    .row > div {
-      height:100%;
-    }
-    .nav-font{
-      font-size: 16pt;
-    }
-  </style>
+    <link rel="stylesheet" href="style.css" type = "text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+    <script src="js/bootstrap.js"></script>
   </head>
   <body>
-    <div id="top_bar" class="page-header">
-      <h1> ChatRoom </h1>
+    <div class="modal fade" id="User_info" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header" style = "background-color: #337ab7">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h4 class="modal-title" id="myModalLabel" style="color: #ffffff">Register</h4>
+          </div>
+          <div class="modal-body">
+            <h4>Please enter your user name</h4>
+            <div id="warning" style="color: #e04646; font-style: italic; font-weight: bold"><br></div>
+            <form class="input-group" id="sign">
+              <span class="input-group-addon" id="sizing-addon1">Username</span>
+              <input id="modal_name" type="text" class="form-control" placeholder="guest" aria-describedby="sizing-addon1">
+            </form>
+          </div>
+          <div class= "modal-footer">
+            <button id="modal_but" type="button" class="btn btn-primary">Sign In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="top_bar" class="header">
+      <span class="glyphicon glyphicon-cloud" style="font-size:40px; padding-top: 10px"></span>&nbsp;Chat Room
+      <div style="float:right; padding:30px 20px 0px 20px ;font-size: 15px"> 
+        <span class=" glyphicon glyphicon-copyright-mark"></span>
+        developer&nbsp;  
+      </div>
+      <div id="welcome" style="float:right; padding:20px 20px 0px 20px ;font-size: 25px;margin-right:30px"></div>
+      <div class="panel-after"></div>
     </div>
     <div id="container" class="row">
       <div id="chat_container" class="col-md-9">
-        <div id="chat_upper" style = "overflow: auto; height:90%">
-          <div id="public" class="chat_main"></div>						
+        <div id="chat_upper" style = "overflow: auto; height:90%; padding-top: 20px">
+          <div id="public" class="chat_main"></div>           
         </div>
-        <form id="input_bar" class="input-group" style="position: relative; bottom: 0%; width:100%; height:10%">
-          <input id="input" style="width:90%" type="text" class="form-control" placeholder="Write a message..." autocomplete="off"/>
-          <button id="send" style="width:10%" class="btn btn-success">Send</button>
-        </form>
+        <div id="chat_lower" style = "overflow: auto; height:10%; padding-top: 10px; border-top: #dddddd solid 0.5px;">
+          <form id="input_bar" class="input-group" style="position: relative; bottom: 0%; width:100%; height:auto;" >
+            <input id="input" style="width:88% ;font-size: 20px;margin-right:20px" type="text" class="form-control" placeholder="Write a message..." autocomplete="off" />
+            <button id="send" style="width:10%; font-size: 15px" class="btn btn-primary"><span class="glyphicon glyphicon-bullhorn"></span> Send</button>
+          </form>
+        </div>
       </div>
-      <div id="flist_container" class="col-md-3" style="border-left: 1px solid #dddddd">
+      <div id="flist_container" class="col-md-3" style="border-left: 1px solid #dddddd; padding-top:25px; background-color:#efefef ">
         <div id="flist_body" style="overflow: auto; height:90%">
-          <ul class="nav nav-pills nav-stacked nav-font" id="flist">
-            <li id="online_public"><a href="#public">public</a></li>
+          <ul class="nav nav-pills nav-stacked nav-font " id="flist">
+            <li id="online_public" style="font-size: 25px;font-weight: bold"><a href="#public"><i class="fa fa-comments-o" style="font-size:25px;"></i> Public</a></li>
           </ul>
         </div>
       </div>
     </div>
   </body>
 </html>
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
 <script>
-  var username = prompt('your name','');
+  var username;
+  var existeduser;
   var windows = "#public";
+  var speaker = "";
+  var lastspeaker = new Object();
+  var socket = io();
+  $(document).ready(function(){
+    $("#User_info").modal({
+      backdrop: 'static',
+      keyboard: false
+    });
+    $("#User_info").modal('show');
+  });
   $(function () {
-    var socket = io();
-    socket.emit('username', username);
-    $('form').submit(function(){
-      socket.emit('chat message', {msg: $('#input').val(), obj: windows.substr(1)});
-      
-      let head = $("<div>", {
-        "class": "panel-heading",
-        text: username
-      });
-      let message = $("<div>", {
-        "class": "panel-body",
-        text: $('#input').val()
-      });
-      let div = $("<div>", {
-        "class": "panel panel-info"
-      });
-      div.append(head, message);
-      if(windows !== "#public" && windows !== "#" + username){
-        $(windows).append(div);
+    $('#sign').submit(function(e){
+      e.preventDefault();
+      if ($('#modal_name').val() === ""){
+        $("#warning").text("Warning: Must contain at least a character")
+        return false;
+      }else if($('#modal_name').val().indexOf(' ') >= 0){
+        $("#warning").text("Warning: Do not contain spaces")
+        return false;
+      }else if(existeduser.indexOf($('#modal_name').val()) >= 0){
+        $("#warning").text("Warning: This name is already registered")
+        return false;
       }
-      $(windows).parent().scrollTop($(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight);
-      $('#input').val('');
+      username = $('#modal_name').val();
+      $("#User_info").modal('hide');
+      socket.emit('username', username);
+      $('#welcome').text( username+"   Welcome!!" );
       return false;
     });
+
+    $('#modal_but').click(function(){
+      $('#sign').submit();
+    });
+
+    $('#input_bar').submit(function(){
+      if($('#input').val()==='') return false;
+      socket.emit('chat message', {msg: $('#input').val(), obj: windows.substr(1)});
+      speaker = username;
+      let div = $("<div>", {"class": "panel panel-info"});
+      let message = $("<div>", { "class": "panel-body",text: $('#input').val() });
+      message.tooltip({title:now(), "trigger":"hover",placement:"left"});
+      let clr = $("<div>", { "class": "panel-after"});  
+      div.append(message, clr);
+
+      if(windows !== "#public" && windows !== "#" + username){
+        if (username !== lastspeaker[windows.substr(1)]) $(windows).append("<br>");
+        $(windows).append(div);
+        $(windows).parent().scrollTop($(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight);
+        lastspeaker[windows.substr(1)] = username;
+      }      
+      $('#input').val('');      
+      return false;
+    });
+
     socket.on('allusers', function(users){
+      existeduser = users;
       users.forEach(function(user_name){
-        $("#chat_upper").append(
-          $("<div>", {class:"chat_main", id:user_name})
-        );
+        $("#chat_upper").append($("<div>", {class:"chat_main", id:user_name}));
         $("#data").hide();
         $("#flist").append(
-          $("<li>",{id: "online_" + user_name}).append(
-            $("<a>", {href: "#" + user_name}).text(user_name)
+          $("<li>",{id: "online_" + user_name, style:"padding-left:20px"}).append(
+            $("<a>", {href: "#" + user_name}).append( $("<span>", {class:"glyphicon glyphicon-user"}) ).append(" "+user_name)
           )
-        );
-        
+        );        
         $("#online_" + user_name).click(function() {
           var $this = $(this),
             _clickTab = $this.find('a').attr('href');
+          var $now = $this.siblings('.active');
+          $now.find('a').find('span.glyphicon').removeClass('glyphicon-menu-right').addClass('glyphicon-user');
           $this.addClass('active').siblings('.active').removeClass('active');
+          $this.find('a').find('span.glyphicon').removeClass('glyphicon-user').addClass('glyphicon-menu-right');
           $(_clickTab).stop(false, true).fadeIn().siblings().hide();
           windows = _clickTab;
           $(windows).parent().scrollTop($(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight);
-          let badge = $("#online_"+windows.substr(1)).find("a").find("span");
+          let badge = $("#online_"+windows.substr(1)).find("a").find("span.badge");
           if (badge.length !== 0){
             badge.remove();
           }
           return false;
-        }).find('a').focus(function(){
-          this.blur();
         });
       });
     });
 
     socket.on('chat', function(msg){
-      let head = $("<div>", {
-        "class": "panel-heading",
-        text: msg.head
-      });
-      let message = $("<div>", {
-        "class": "panel-body",
-        text: msg.message
-      });
-      let div = $("<div>", {
-        "class": "panel panel-info"
-      });
-      div.append(head, message);
+      let div = $("<div>", {"class": "panel panel-info"});
+      if (msg.head === username){
+        let message = $("<div>", { "class": "panel-body",text: msg.message});
+        message.tooltip({title:now(), "trigger":"hover",placement:"left"});
+        let clr = $("<div>", { "class": "panel-after"});  
+        div.append(message, clr);
+        speaker=username;
+      }
+      else {
+        let head = $("<div>", {"class": "panel-heading",text: msg.head+"  "});
+        if(msg.to === "public"){
+          if(msg.head === lastspeaker["public"]){
+            head.addClass('ignored');
+          }
+        }else{
+          if(msg.head === lastspeaker[msg.head]){
+            head.addClass('ignored');
+          }
+        }
+
+        let airplane = $("<span>", {"class": "glyphicon glyphicon-send", style:"padding-top:3px"});
+        head.append(airplane);
+        let message = $("<div>", { "class": "panel-body-friend",text: msg.message }); 
+        message.tooltip({title:now(), "trigger":"hover",placement:"right"});
+        let clr = $("<div>", { "class": "panel-after"});  
+        div.append(head, message, clr);
+        speaker=msg.head;
+      }
+      
       if (msg.to === "public"){
+        if (speaker !== lastspeaker["public"]) $("#public").append("<br>");
         $("#public").append(div);
         if(windows !== "#public"){
           $("#public").hide();
@@ -124,7 +189,7 @@
         else{
           $(windows).parent().scrollTop($(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight);
         }
-        let badge = $("#online_public").find("span");
+        let badge = $("#online_public").find("span.badge");
         if (windows !== "#public" || $(windows).parent().scrollTop() !== $(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight){
           if (badge.length === 0){
             $("#online_public").find("a").append(
@@ -138,6 +203,7 @@
         }
       }
       else{
+        if (speaker !== lastspeaker[msg.head]) $("#"+msg.head).append("<br>");
         $("#" + msg.head).append(div);
         if(windows !== "#" + msg.head){
           $("#" + msg.head).hide();
@@ -145,7 +211,7 @@
         else{
           $(windows).parent().scrollTop($(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight);
         }
-        let badge = $("#online_" + msg.head).find("span");
+        let badge = $("#online_" + msg.head).find("span.badge");
         if (windows !== "#" + msg.head || $(windows).parent().scrollTop() !== $(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight){
           if (badge.length === 0){
             $("#online_" + msg.head).find("a").append(
@@ -158,6 +224,11 @@
           }
         }
       }
+      if(msg.to === "public"){
+        lastspeaker["public"] = speaker;
+      }else{
+        lastspeaker[msg.head] = speaker;
+      }
     });
 
     socket.on('online',function(data){
@@ -166,26 +237,25 @@
       );
       $("#data").hide();
       $("#flist").append(
-        $("<li>",{id: "online_" + data}).append(
-          $("<a>", {href: "#" + data}).text(data)
+        $("<li>",{id: "online_" + data, style:"padding-left:20px"}).append(
+          $("<a>", {href: "#" + data}).append( $("<span>", {class:"glyphicon glyphicon-user"}) ).append(" "+data)
         )
       );
       $("#online_" + data).click(function() {
         var $this = $(this),
           _clickTab = $this.find('a').attr('href');
+        var $now = $this.siblings('.active');
+        $now.find('a').find('span.glyphicon').removeClass('glyphicon-menu-right').addClass('glyphicon-user');
         $this.addClass('active').siblings('.active').removeClass('active');
+        $this.find('a').find('span.glyphicon').removeClass('glyphicon-user').addClass('glyphicon-menu-right');
         $(_clickTab).stop(false, true).fadeIn().siblings().hide();
         windows = _clickTab;
         $(windows).parent().scrollTop($(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight);
-        let badge = $("#online_"+windows.substr(1)).find("a").find("span");
-        if (badge.length !== 0){
-          badge.remove();
-        }
+        let badge = $("#online_"+windows.substr(1)).find("a").find("span.badge");
+        if (badge.length !== 0){badge.remove();}
         return false;
-      }).find('a').focus(function(){
-        this.blur();
       });
-		});
+    });
 
     socket.on('offline', function(data){
       $("#online_" + data).remove();
@@ -200,19 +270,22 @@
       $('ul li').click(function() {
         var $this = $(this),
           _clickTab = $this.find('a').attr('href');
+        var $now = $this.siblings('.active');
+        $now.find('a').find('span.glyphicon').removeClass('glyphicon-menu-right').addClass('glyphicon-user');
         $this.addClass('active').siblings('.active').removeClass('active');
-
+        $this.find('a').find('span.glyphicon').removeClass('glyphicon-user').addClass('glyphicon-menu-right');
         $(_clickTab).stop(false, true).fadeIn().siblings().hide();
         windows = _clickTab;
         $(windows).parent().scrollTop($(windows).parent()[0].scrollHeight - $(windows).parent()[0].clientHeight);
-        let badge = $("#online_"+windows.substr(1)).find("a").find("span");
-        if (badge.length !== 0){
-          badge.remove();
-        }
+        let badge = $("#online_"+windows.substr(1)).find("a").find("span.badge");
+        if (badge.length !== 0){badge.remove();}
         return false;
-      }).find('a').focus(function(){
-        this.blur();
       });
     });
   });
+  function now() {
+    var date = new Date();
+    var time = date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + date.getDate() + ' ' + date.getHours() + ':' + (date.getMinutes() < 10 ? ('0' + date.getMinutes()) : date.getMinutes()) + ":" + (date.getSeconds() < 10 ? ('0' + date.getSeconds()) : date.getSeconds());
+    return time;
+  }
 </script>
