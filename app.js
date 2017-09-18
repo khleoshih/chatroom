@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-var users=[];
+var users=[]; 
 
 app.use(express.static("../chatroom")); 
 
